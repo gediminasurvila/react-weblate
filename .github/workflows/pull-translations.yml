@@ -1,0 +1,21 @@
+name: Update Translations
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-i18n:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update submodule to latest
+        run: |
+          git submodule update --remote --merge
+          git add public/locales
+          git commit -m "Update translations from submodule" || echo "No changes"
+          git push
