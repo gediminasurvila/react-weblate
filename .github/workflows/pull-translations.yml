@@ -6,7 +6,7 @@ on:
 # Add permissions at the workflow level for simplicity, or just for the 'update-i18n' job.
 # Providing 'contents: write' is crucial for pushing.
 permissions:
-  contents: write # <--- ADD THIS LINE HERE!
+  contents: write
 
 jobs:
   update-i18n:
@@ -16,7 +16,7 @@ jobs:
       - name: Checkout main repository
         uses: actions/checkout@v4
         with:
-          submodules: false # Keep this as false, we manage submodules manually
+          submodules: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set Git identity
