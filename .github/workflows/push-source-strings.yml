@@ -4,9 +4,9 @@ on:
   push:
     paths:
       # This trigger path should point to your SOURCE language translation file(s)
-      # assuming 'en/translation.json' is where you add new English strings.
+      # assuming 'en.json' is where you add new English strings.
       # Adjust if your source language file is named differently or located elsewhere.
-      - "public/locales/en/translation.json"
+      - "public/locales/en.json"
     branches:
       - main # Trigger when changes are pushed to the 'main' branch of your main repo
 
