@@ -1,22 +1,20 @@
 name: Update Translations
 
 on:
-  workflow_dispatch: # Allows you to trigger this manually from GitHub Actions tab
+  workflow_dispatch:
 
-# Add permissions at the workflow level for simplicity, or just for the 'update-i18n' job.
-# Providing 'contents: write' is crucial for pushing.
 permissions:
-  contents: write
+  contents: write # Crucial for pushing changes back to the main repo
 
 jobs:
   update-i18n:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout main repository
+      - name: Checkout main repository and submodules
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: recursive # Keep this as recursive for initial checkout
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set Git identity
@@ -24,34 +22,23 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      # - name: Clean and Re-initialize Submodule to Latest Remote State
-      #   run: |
-      #     SUBMODULE_PATH="public/locales"
-      #     SUBMODULE_REPO_URL="https://github.com/gediminasurvila/react-weblate-i18n.git"
-
-      #     echo "Ensuring .gitmodules has the correct entry (should be already from initial checkout)"
-      #     cat .gitmodules
-
-      #     echo "Attempting to deinitialize and remove existing submodule directory to ensure clean state..."
-      #     git submodule deinit -f "${SUBMODULE_PATH}" || true
-      #     rm -rf "${SUBMODULE_PATH}"
-
-      #     echo "Synchronizing submodule configuration..."
-      #     git submodule sync
-
-      #     echo "Updating/Initializing submodule to the latest remote commit..."
-      #     git submodule update --init --remote --force "${SUBMODULE_PATH}"
-
-      #     echo "Verifying the submodule URL after re-init..."
-      #     git config --get submodule.${SUBMODULE_PATH//\//.}.url || echo "Submodule URL not found in Git config, might be a path issue."
+      # --- NEW STEP: Pull latest changes into the submodule from its remote ---
+      - name: Pull latest translations into submodule
+        run: |
+          echo "Updating submodule 'public/locales' to its latest remote state..."
+          # This command explicitly fetches and merges the latest changes
+          # from the submodule's remote tracking branch.
+          git submodule update --remote --merge public/locales
+          echo "Submodule update attempted."
 
       - name: Stage and Commit Submodule Changes to Main Repo
         run: |
+          # Check if the submodule's tracked commit hash has changed in the parent repo
           if git diff --exit-code public/locales; then
             echo "No changes detected in the submodule commit hash. Skipping commit."
           else
             echo "Changes detected in the submodule commit hash. Staging and committing..."
-            git add public/locales
-            git commit -m "Update translations from Weblate"
-            git push # This push should now succeed with 'contents: write' permission
+            git add public/locales # Stage the change in the submodule's commit hash
+            git commit -m "🔁 Update translations from Weblate"
+            git push # This push should now succeed
           fi
