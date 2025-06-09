@@ -1,17 +1,18 @@
 name: Update Translations
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Allows you to trigger this manually from GitHub Actions tab
 
 jobs:
   update-i18n:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo with submodules
+      - name: Checkout main repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          # IMPORTANT: Do NOT initialize submodules here. We'll do it manually later.
+          submodules: false # Changed from 'recursive'
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set Git identity
@@ -19,45 +20,49 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Synchronize and Initialize Submodule Configuration
+      # --- REVISED SUBMODULE UPDATE LOGIC TO AVOID MERGE HISTORY ISSUES ---
+      - name: Clean and Re-initialize Submodule to Latest Remote State
         run: |
-          echo "Attempting to synchronize submodule configuration..."
+          SUBMODULE_PATH="public/locales"
+          SUBMODULE_REPO_URL="https://github.com/gediminasurvila/react-weblate-i18n.git"
+
+          echo "Ensuring .gitmodules has the correct entry (should be already from initial checkout)"
+          cat .gitmodules
+
+          echo "Attempting to deinitialize and remove existing submodule directory to ensure clean state..."
+          # Deinitialize the submodule to remove its Git state from the parent repo's .git/modules
+          # This helps clear out any lingering bad state.
+          # Use || true to prevent the step from failing if deinit can't find anything (e.g., first run)
+          git submodule deinit -f "${SUBMODULE_PATH}" || true
+
+          # Physically remove the submodule directory to ensure a fresh clone/checkout
+          rm -rf "${SUBMODULE_PATH}"
+
+          echo "Synchronizing submodule configuration (in case .gitmodules was manually edited or has issues)..."
+          # This ensures the parent repo's internal config for the submodule's URL is correct.
           git submodule sync
 
-          echo "Initializing and updating submodule recursively..."
-          git submodule update --init --recursive
+          echo "Updating/Initializing submodule to the latest remote commit..."
+          # This command will clone/fetch the latest state of the submodule into the directory.
+          # --init: Initializes if not present.
+          # --remote: Updates to the commit specified by the submodule's remote tracking branch.
+          # --force: Overwrites any existing content (which is fine since we just deleted it).
+          git submodule update --init --remote --force "${SUBMODULE_PATH}"
 
-          echo "Verifying the submodule URL after sync and update..."
-          git config --get submodule.public/locales.url || echo "Submodule URL not found in Git config, might be a path issue."
+          # Optional: Verify that the correct URL was used for the submodule update
+          echo "Verifying the submodule URL after re-init..."
+          # Note: The syntax for 'git config --get' for submodules uses dots for path separators
+          git config --get submodule.${SUBMODULE_PATH//\//.}.url || echo "Submodule URL not found in Git config, might be a path issue."
 
-      # --- NEW CRITICAL STEP: Configure merge strategy for the submodule ---
-      - name: Configure submodule merge to allow unrelated histories
+      - name: Stage and Commit Submodule Changes to Main Repo
         run: |
-          # Go into the submodule directory to set its local Git config
-          cd public/locales
-          git config pull.rebase false # Ensure pull doesn't try rebase (merge is preferred for this fix)
-          git config pull.ff only    # Or false, but we want a merge commit or fast-forward
-          git config merge.renormalize false # Generally good practice to avoid renormalize issues
-          # THIS IS THE KEY: Configure the merge strategy for the submodule to allow unrelated histories
-          git config merge.ours.allowUnrelatedHistories true 
-          # Or if you want a global setting that applies to all merges,
-          # but targeting the specific submodule is safer:
-          # git config --global merge.renormalize false
-          # git config --global pull.rebase false
-          # git config --global merge.ours.allowUnrelatedHistories true
-          cd - # Go back to the main repo root
-
-      - name: Update submodule content and commit changes to main repo
-        run: |
-          echo "Pulling latest changes from the submodule's remote (allowing unrelated histories if necessary)..."
-          # This command will now use the configured merge strategy for the submodule
-          git submodule update --remote --merge
-
+          # Check if the submodule's tracked commit hash has changed in the parent repo
+          # This means new translations were pulled.
           if git diff --exit-code public/locales; then
             echo "No changes detected in the submodule commit hash. Skipping commit."
           else
             echo "Changes detected in the submodule commit hash. Staging and committing..."
-            git add public/locales
+            git add public/locales # Stage the change in the submodule's commit hash for the parent repo
             git commit -m "🔁 Update translations from Weblate"
             git push
           fi
