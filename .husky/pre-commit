@@ -3,7 +3,7 @@
 # --- Configuration ---
 # Get submodule path dynamically (same logic as in your GitHub Action)
 SUBMODULE_PATH=$(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
-SOURCE_FILE_PATH="en.json" # Your source translation file name
+SOURCE_FILE_PATH="locales/en.json" # Your source translation file name
 
 if [ -z "$SUBMODULE_PATH" ]; then
   echo "Husky Pre-commit: Error: Could not find submodule path in .gitmodules. Skipping i18n sync."

@@ -40,7 +40,7 @@ jobs:
 
           # Define the name of your source translation file within the submodule.
           # Based on your feedback, this is 'en.json' directly inside the submodule root.
-          SOURCE_FILE_PATH="en.json" 
+          SOURCE_FILE_PATH="locales/en.json" 
 
           if [ -z "$SUBMODULE_PATH" ]; then
             echo "Error: Could not find submodule path in .gitmodules. Please ensure your .gitmodules file is correctly configured."
