@@ -1,0 +1,81 @@
+#!/usr/bin/env sh
+
+# --- Configuration ---
+# Get submodule path dynamically (same logic as in your GitHub Action)
+SUBMODULE_PATH=$(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+SOURCE_FILE_PATH="en.json" # Your source translation file name
+
+if [ -z "$SUBMODULE_PATH" ]; then
+  echo "Husky Pre-commit: Error: Could not find submodule path in .gitmodules. Skipping i18n sync."
+  exit 0 # Allow the main commit to proceed if submodule path can't be determined
+fi
+
+echo "Husky Pre-commit: Starting i18n synchronization for ${SUBMODULE_PATH}/${SOURCE_FILE_PATH}"
+
+# --- Step 1: Process the submodule (cd into it, commit & push changes) ---
+# Navigate into the submodule directory
+cd "$SUBMODULE_PATH" || { echo "Husky Pre-commit: Error: Failed to cd into submodule directory '${SUBMODULE_PATH}'. Aborting commit."; exit 1; }
+
+# --- REVISED CHECKOUT LOGIC FOR ROBUSTNESS ---
+# Ensure we're on the main branch of the submodule.
+# This prevents the 'branch named 'main' already exists' from causing a script failure
+# by checking if 'main' exists before trying to create it.
+if git rev-parse --verify main >/dev/null 2>&1; then
+    git checkout main || { echo "Husky Pre-commit: Error: Failed to checkout submodule 'main' branch."; exit 1; }
+else
+    git checkout -b main || { echo "Husky Pre-commit: Error: Failed to create and checkout submodule 'main' branch."; exit 1; }
+fi
+
+
+# --- CRITICAL DEBUGGING STEP: Verify file existence and content ---
+echo "Contents of submodule directory ('$(pwd)'):"
+ls -F
+echo "Contents of expected source file ('${SOURCE_FILE_PATH}'):"
+if [ -f "$SOURCE_FILE_PATH" ]; then
+  cat "$SOURCE_FILE_PATH"
+else
+  echo "ERROR: ${SOURCE_FILE_PATH} does NOT exist in the submodule directory!"
+  # Exit with an error to stop the workflow if the file is genuinely missing
+  exit 1 
+fi
+# --- END DEBUGGING STEP ---
+
+
+# Check for changes in the specific source file within the submodule's working tree
+# using 'git status --porcelain' for robustness.
+if git status --porcelain | grep -q "$SOURCE_FILE_PATH"; then
+  echo "Husky Pre-commit: Changes detected in ${SOURCE_FILE_PATH} in submodule. Staging and committing..."
+  git add "$SOURCE_FILE_PATH"
+  
+  # Check if there's actually anything staged to commit after 'git add'
+  if git diff --cached --quiet; then
+    echo "Husky Pre-commit: No actual changes to commit in submodule after staging. Skipping submodule commit."
+  else
+    # Commit the changes within the submodule.
+    # --no-verify is used to prevent this submodule commit from re-triggering the same pre-commit hook (infinite loop).
+    git commit -m "feat: Automate source string update via pre-commit" --no-verify || { echo "Husky Pre-commit: Error: Failed to commit changes in submodule."; exit 1; }
+    
+    echo "Husky Pre-commit: Pushing submodule changes to its remote..."
+    # This push requires local Git credentials to be configured (e.g., SSH key or credential manager).
+    # '|| { ...; exit 1; }' ensures the main commit fails if the submodule push fails.
+    git push origin main || { echo "Husky Pre-commit: Error: Failed to push submodule changes. Please check your git credentials for the submodule remote. Aborting main commit."; exit 1; }
+    echo "Husky Pre-commit: Submodule changes pushed successfully."
+  fi
+else
+  echo "Husky Pre-commit: No changes detected in ${SOURCE_FILE_PATH} in submodule's working tree. Skipping submodule commit."
+fi
+
+# --- Step 2: Go back to the main repository root ---
+# Important to return to the parent directory for the main commit to proceed.
+cd - || { echo "Husky Pre-commit: Error: Failed to return to main repo directory. Aborting commit."; exit 1; }
+
+# --- Step 3: Stage the submodule pointer in the main repository ---
+# The main repo's pointer to the submodule has now changed because the submodule's HEAD was pushed.
+if git status --porcelain | grep -q "$SUBMODULE_PATH"; then
+  echo "Husky Pre-commit: Submodule pointer updated in main repo. Staging..."
+  git add "$SUBMODULE_PATH"
+else
+  echo "Husky Pre-commit: Submodule pointer unchanged in main repo."
+fi
+
+echo "Husky Pre-commit: i18n sync complete. Proceeding with main commit."
