@@ -6,6 +6,7 @@ on:
 jobs:
   update-i18n:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo with submodules
         uses: actions/checkout@v4
@@ -13,9 +14,14 @@ jobs:
           submodules: recursive
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update submodule to latest
+      - name: Set Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Update submodule and commit changes
         run: |
           git submodule update --remote --merge
           git add public/locales
-          git commit -m "Update translations from submodule" || echo "No changes"
+          git commit -m "Update translations" || echo "No changes to commit"
           git push
