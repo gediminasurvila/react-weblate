@@ -4,17 +4,17 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # Crucial for pushing changes back to the main repo
+  contents: write
 
 jobs:
   update-i18n:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout main repository and submodules
+      - name: Checkout main repository (without submodules initially)
         uses: actions/checkout@v4
         with:
-          submodules: recursive # Keep this as recursive for initial checkout
+          submodules: false
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set Git identity
@@ -22,23 +22,37 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      # --- NEW STEP: Pull latest changes into the submodule from its remote ---
-      - name: Pull latest translations into submodule
+      - name: Clean and Re-initialize Submodule to Latest Remote State
         run: |
-          echo "Updating submodule 'public/locales' to its latest remote state..."
-          # This command explicitly fetches and merges the latest changes
-          # from the submodule's remote tracking branch.
-          git submodule update --remote --merge public/locales
-          echo "Submodule update attempted."
+          # The submodule path 'public/locales' is used directly in the commands.
+          # The submodule URL is automatically handled by 'git submodule' commands
+          # by reading it from your .gitmodules file.
+
+          echo "Ensuring .gitmodules has the correct entry (should be from initial checkout)."
+          cat .gitmodules # Good for debugging/verification in logs
+
+          echo "Attempting to deinitialize and remove existing submodule directory to ensure a clean state..."
+          git submodule deinit -f "public/locales" || true # Using the path directly
+          rm -rf "public/locales" # Using the path directly
+
+          echo "Synchronizing submodule configuration (ensures correct URL is used)..."
+          git submodule sync # This command processes all submodules based on .gitmodules
+
+          echo "Updating/Initializing submodule to the latest remote commit..."
+          git submodule update --init --remote --force "public/locales" # Using the path directly
+
+          # Optional: You can still verify the URL if you wish, but it's not essential for the command itself.
+          # The 'git submodule' commands will use the URL from .gitmodules.
+          # echo "Verifying the submodule URL after re-init..."
+          # git config --get submodule.public.locales.url || echo "Submodule URL not found in Git config."
 
       - name: Stage and Commit Submodule Changes to Main Repo
         run: |
-          # Check if the submodule's tracked commit hash has changed in the parent repo
           if git diff --exit-code public/locales; then
             echo "No changes detected in the submodule commit hash. Skipping commit."
           else
             echo "Changes detected in the submodule commit hash. Staging and committing..."
-            git add public/locales # Stage the change in the submodule's commit hash
+            git add public/locales
             git commit -m "🔁 Update translations from Weblate"
-            git push # This push should now succeed
+            git push
           fi
