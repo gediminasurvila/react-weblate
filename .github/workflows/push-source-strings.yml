@@ -1,3 +1,4 @@
+# .github/workflows/push-source-strings.yml
 name: Push new source strings to translation repo
 
 on:
@@ -49,34 +50,57 @@ jobs:
           echo "Dynamically determined submodule path: ${SUBMODULE_PATH}"
           echo "Source translation file path (relative to submodule): ${SOURCE_FILE_PATH}"
 
-            
+
           echo "submodule_path=${SUBMODULE_PATH}" >> "$GITHUB_OUTPUT"
           echo "source_file_path=${SOURCE_FILE_PATH}" >> "$GITHUB_OUTPUT"
 
-      - name: Commit and push changes in submodule
+      - name: Commit and push changes in submodule # Corrected indentation here!
         # Access outputs from the 'get_paths' step to use the dynamically determined paths.
         run: |
-          # Navigate into the submodule directory to perform Git operations specific to it.
-          cd ${{ steps.get_paths.outputs.submodule_path }}
+          SUBMODULE_DIR="${{ steps.get_paths.outputs.submodule_path }}"
+          SOURCE_FILE="${{ steps.get_paths.outputs.source_file_path }}" # This is now "en.json"
+
+          echo "Attempting to process submodule: ${SUBMODULE_DIR}"
+          echo "Expected source file: ${SOURCE_FILE}"
+
+          # Navigate into the submodule directory.
+          cd "${SUBMODULE_DIR}"
 
           # Ensure we are on the 'main' branch of the submodule for the push.
-          # '|| git checkout -b main' attempts to create the branch if it doesn't exist locally.
+          # This command ensures that the submodule's local 'main' branch exists and is checked out.
+          # '|| git checkout -b main' means "if git checkout main fails, then create and checkout a new 'main' branch".
           git checkout main || git checkout -b main
 
-          # Check if the source translation file has any changes compared to the submodule's HEAD.
-          # The '--quiet' flag suppresses output; the command's exit code indicates diffs.
-          if git diff --quiet ${{ steps.get_paths.outputs.source_file_path }}; then
-            echo "No changes detected in ${{ steps.get_paths.outputs.source_file_path }} within the submodule. Skipping commit."
+          # --- CRITICAL DEBUGGING STEP: Verify file existence and content ---
+          echo "Contents of submodule directory ('$(pwd)'):"
+          ls -F
+          echo "Contents of expected source file ('${SOURCE_FILE}'):"
+          if [ -f "$SOURCE_FILE" ]; then
+            cat "$SOURCE_FILE"
           else
-            echo "Changes detected in ${{ steps.get_paths.outputs.source_file_path }}. Staging and committing..."
-            # Stage the specific source translation file for commit within the submodule.
-            git add ${{ steps.get_paths.outputs.source_file_path }}
+            echo "ERROR: ${SOURCE_FILE} does NOT exist in the submodule directory!"
+            # Exit with an error to stop the workflow if the file is genuinely missing
+            exit 1 
+          fi
+          # --- END DEBUGGING STEP ---
+
+
+          # Check if there are actual changes to the source file
+          # We'll use 'git status --porcelain' which is more robust for checking working tree changes.
+          # It returns unstaged (M), added (A), or deleted (D) files.
+          if git status --porcelain | grep -q "${SOURCE_FILE}"; then
+            echo "Changes detected in ${SOURCE_FILE}. Staging and committing..."
+            git add "${SOURCE_FILE}"
             
-            # Create a commit within the submodule's repository.
-            git commit -m "feat: Update source strings for Weblate"
-            
-            # Push the changes from the submodule's 'main' branch to its remote repository.
-            # This uses the PAT for authentication. Replace 'gediminasurvila' with your GitHub username.
-            git push https://gediminasurvila:${{ secrets.WEBLATE_PUSH_TOKEN }}@github.com/gediminasurvila/react-weblate-i18n.git main
-            echo "Source strings pushed to translation repository."
+            # Check if there's actually anything to commit after 'git add'
+            if git diff --cached --quiet; then
+              echo "No actual changes to commit after staging ${SOURCE_FILE}. Skipping commit."
+            else
+              git commit -m "feat: Update source strings for Weblate"
+              # Push using the PAT to the submodule's remote
+              git push https://gediminasurvila:${{ secrets.WEBLATE_PUSH_TOKEN }}@github.com/gediminasurvila/react-weblate-i18n.git main
+              echo "Source strings pushed to translation repository."
+            fi
+          else
+            echo "No changes detected in ${SOURCE_FILE} within the submodule's working tree relative to its HEAD. Skipping commit."
           fi
