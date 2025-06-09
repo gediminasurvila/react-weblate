@@ -1,7 +1,7 @@
 name: Update Translations
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Allows you to trigger this manually from GitHub Actions tab
 
 jobs:
   update-i18n:
@@ -12,6 +12,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          # The default GITHUB_TOKEN is sufficient if the submodule URL is correctly public and configured
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set Git identity
@@ -19,9 +20,43 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Update submodule and commit changes
+      # --- CRITICAL STEPS TO ENSURE CORRECT SUBMODULE URL IS USED ---
+      - name: Synchronize and Initialize Submodule Configuration
         run: |
+          echo "Attempting to synchronize submodule configuration..."
+          # This command reads .gitmodules and updates the internal Git config for the submodule.
+          git submodule sync
+
+          echo "Initializing and updating submodule recursively..."
+          # This ensures the submodule is correctly set up with the synchronized URL.
+          git submodule update --init --recursive
+
+          echo "Verifying the submodule URL after sync and update..."
+          # Print the URL Git is now configured to use for the submodule
+          git config --get submodule.public/locales.url || echo "Submodule URL not found in Git config, might be a path issue."
+
+      # --- NOW PROCEED WITH THE REMOTE MERGE AND COMMIT ---
+      - name: Update submodule content and commit changes to main repo
+        run: |
+          echo "Pulling latest changes from the submodule's remote..."
+          # This command should now use the correctly configured URL
           git submodule update --remote --merge
-          git add public/locales
-          git commit -m "Update translations" || echo "No changes to commit"
-          git push
+
+          # Check if there are any changes in the submodule's commit hash
+          if git diff --exit-code public/locales; then
+            echo "No changes detected in the submodule commit hash. Skipping commit."
+          else
+            echo "Changes detected in the submodule commit hash. Staging and committing..."
+            # Add the submodule directory to stage the change in its commit hash
+            git add public/locales
+            
+            # Commit the change to the main repository.
+            git commit -m "🔁 Update translations from Weblate"
+            
+            # Push the changes back to the main repository
+            git push
+          fi
+        # If 'git diff --exit-code' finds no changes, the 'if' block will prevent the commit/push.
+        # This makes the step succeed even if no new translations were pulled.
+        # If a commit/push happens, it will proceed.
+        # The '|| echo "No changes to commit"' from previous iterations is replaced by the 'if' block.
