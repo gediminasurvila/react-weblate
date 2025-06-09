@@ -24,26 +24,26 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Clean and Re-initialize Submodule to Latest Remote State
-        run: |
-          SUBMODULE_PATH="public/locales"
-          SUBMODULE_REPO_URL="https://github.com/gediminasurvila/react-weblate-i18n.git"
+      # - name: Clean and Re-initialize Submodule to Latest Remote State
+      #   run: |
+      #     SUBMODULE_PATH="public/locales"
+      #     SUBMODULE_REPO_URL="https://github.com/gediminasurvila/react-weblate-i18n.git"
 
-          echo "Ensuring .gitmodules has the correct entry (should be already from initial checkout)"
-          cat .gitmodules
+      #     echo "Ensuring .gitmodules has the correct entry (should be already from initial checkout)"
+      #     cat .gitmodules
 
-          echo "Attempting to deinitialize and remove existing submodule directory to ensure clean state..."
-          git submodule deinit -f "${SUBMODULE_PATH}" || true
-          rm -rf "${SUBMODULE_PATH}"
+      #     echo "Attempting to deinitialize and remove existing submodule directory to ensure clean state..."
+      #     git submodule deinit -f "${SUBMODULE_PATH}" || true
+      #     rm -rf "${SUBMODULE_PATH}"
 
-          echo "Synchronizing submodule configuration..."
-          git submodule sync
+      #     echo "Synchronizing submodule configuration..."
+      #     git submodule sync
 
-          echo "Updating/Initializing submodule to the latest remote commit..."
-          git submodule update --init --remote --force "${SUBMODULE_PATH}"
+      #     echo "Updating/Initializing submodule to the latest remote commit..."
+      #     git submodule update --init --remote --force "${SUBMODULE_PATH}"
 
-          echo "Verifying the submodule URL after re-init..."
-          git config --get submodule.${SUBMODULE_PATH//\//.}.url || echo "Submodule URL not found in Git config, might be a path issue."
+      #     echo "Verifying the submodule URL after re-init..."
+      #     git config --get submodule.${SUBMODULE_PATH//\//.}.url || echo "Submodule URL not found in Git config, might be a path issue."
 
       - name: Stage and Commit Submodule Changes to Main Repo
         run: |
@@ -52,6 +52,6 @@ jobs:
           else
             echo "Changes detected in the submodule commit hash. Staging and committing..."
             git add public/locales
-            git commit -m "🔁 Update translations from Weblate"
+            git commit -m "Update translations from Weblate"
             git push # This push should now succeed with 'contents: write' permission
           fi
