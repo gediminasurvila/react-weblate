@@ -1,3 +1,0 @@
-[submodule "public/translations"]  # New name for the submodule
-	path = public/translations
-	url = https://github.com/gediminasurvila/react-weblate-i18n.git
