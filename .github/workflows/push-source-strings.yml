@@ -1,0 +1,84 @@
+name: Push new source strings to translation repo
+
+on:
+  push:
+    paths:
+      # This trigger path should point to your SOURCE language translation file(s)
+      # assuming 'en/translation.json' is where you add new English strings.
+      # Adjust if your source language file is named differently or located elsewhere.
+      - "public/locales/en/translation.json"
+    branches:
+      - main # Trigger when changes are pushed to the 'main' branch of your main repo
+
+permissions:
+  # This workflow needs to read content from the main repo (implicitly granted by checkout)
+  # and push to the submodule repo (handled by PAT in the push URL, not GITHUB_TOKEN permissions here)
+  # No specific permissions are needed for GITHUB_TOKEN as it won't be used for the push.
+  # However, adding a minimal 'contents: read' is good practice.
+  contents: read
+
+jobs:
+  push-source-translations:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main repo with submodules
+        uses: actions/checkout@v4
+        with:
+          # Using the PAT here allows git to correctly checkout the submodule
+          # and ensures subsequent operations have the necessary credentials.
+          token: ${{ secrets.WEBLATE_PUSH_TOKEN }}
+          submodules: recursive # Checkout the submodule at the state committed in the main repo
+
+      - name: Configure Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Get Submodule Path and Source File
+        id: get_paths # Assign an ID to this step to access its outputs
+        run: |
+          # Dynamically extract the submodule path from .gitmodules
+          # Assumes you have one primary submodule for translations.
+          SUBMODULE_PATH=$(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+          SOURCE_FILE_PATH="en/translation.json" # Relative path within the submodule
+
+          if [ -z "$SUBMODULE_PATH" ]; then
+            echo "Error: Could not find submodule path in .gitmodules."
+            exit 1
+          fi
+
+          echo "Dynamically determined submodule path: ${SUBMODULE_PATH}"
+          echo "Source translation file path (relative to submodule): ${SOURCE_FILE_PATH}"
+
+          # Set outputs that can be used in subsequent steps
+          echo "submodule_path=${SUBMODULE_PATH}" >> "$GITHUB_OUTPUT"
+          echo "source_file_path=${SOURCE_FILE_PATH}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push changes in submodule
+        # Use outputs from the previous step to get the paths
+        run: |
+          # Navigate into the dynamically determined submodule directory
+          cd ${{ steps.get_paths.outputs.submodule_path }}
+
+          # Ensure we are on the main branch of the submodule to push to
+          # Use '|| git checkout -b main' to create the branch if it doesn't exist locally
+          git checkout main || git checkout -b main
+
+          # Check if the source file has actual changes compared to the submodule's HEAD
+          # If it's quiet (no diff), then there are no changes.
+          if git diff --quiet ${{ steps.get_paths.outputs.source_file_path }}; then
+            echo "No changes detected in ${{ steps.get_paths.outputs.source_file_path }} within the submodule. Skipping commit."
+          else
+            echo "Changes detected in ${{ steps.get_paths.outputs.source_file_path }}. Staging and committing..."
+            # Stage the specific source language file
+            git add ${{ steps.get_paths.outputs.source_file_path }}
+            
+            # Commit the changes within the submodule
+            git commit -m "feat: Update source strings for Weblate"
+            
+            # Push using the PAT to the submodule's remote repository
+            # IMPORTANT: Replace 'gediminasurvila' with your GitHub username if different.
+            git push https://gediminasurvila:${{ secrets.WEBLATE_PUSH_TOKEN }}@github.com/gediminasurvila/react-weblate-i18n.git main
+            echo "Source strings pushed to translation repository."
+          fi
