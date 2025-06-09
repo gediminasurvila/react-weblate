@@ -30,19 +30,34 @@ jobs:
           echo "Verifying the submodule URL after sync and update..."
           git config --get submodule.public/locales.url || echo "Submodule URL not found in Git config, might be a path issue."
 
+      # --- NEW CRITICAL STEP: Configure merge strategy for the submodule ---
+      - name: Configure submodule merge to allow unrelated histories
+        run: |
+          # Go into the submodule directory to set its local Git config
+          cd public/locales
+          git config pull.rebase false # Ensure pull doesn't try rebase (merge is preferred for this fix)
+          git config pull.ff only    # Or false, but we want a merge commit or fast-forward
+          git config merge.renormalize false # Generally good practice to avoid renormalize issues
+          # THIS IS THE KEY: Configure the merge strategy for the submodule to allow unrelated histories
+          git config merge.ours.allowUnrelatedHistories true 
+          # Or if you want a global setting that applies to all merges,
+          # but targeting the specific submodule is safer:
+          # git config --global merge.renormalize false
+          # git config --global pull.rebase false
+          # git config --global merge.ours.allowUnrelatedHistories true
+          cd - # Go back to the main repo root
+
       - name: Update submodule content and commit changes to main repo
         run: |
           echo "Pulling latest changes from the submodule's remote (allowing unrelated histories if necessary)..."
-          # *** IMPORTANT CHANGE HERE ***
-          # Add --allow-unrelated-histories to the merge operation within the submodule update
-          git submodule update --remote --merge --allow-unrelated-histories
+          # This command will now use the configured merge strategy for the submodule
+          git submodule update --remote --merge
 
-          # Check if there are any changes in the submodule's commit hash
           if git diff --exit-code public/locales; then
             echo "No changes detected in the submodule commit hash. Skipping commit."
           else
             echo "Changes detected in the submodule commit hash. Staging and committing..."
             git add public/locales
-            git commit -m "Update translations from Weblate"
+            git commit -m "🔁 Update translations from Weblate"
             git push
           fi
