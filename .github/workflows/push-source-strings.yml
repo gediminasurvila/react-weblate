@@ -2,14 +2,15 @@ name: Push new source strings to translation repo
 
 on:
   push:
-    # This action will now trigger on ANY push to the 'main' branch
-    # (no longer limited by specific paths like 'public/locales/en/translation.json')
+    # This action will now trigger on ANY push to the 'main' branch of your main repository.
     branches:
       - main
-  workflow_dispatch: # Keep this to allow manual triggering
+  workflow_dispatch: # Allows manual triggering from the GitHub Actions tab.
 
 permissions:
-  contents: read
+  # This workflow needs to read content from the main repo (implicitly granted by checkout).
+  # The push to the submodule repo is handled by the PAT in the push URL, not GITHUB_TOKEN permissions here.
+  contents: read # Minimal permission for the GITHUB_TOKEN for basic repo access.
 
 jobs:
   push-source-translations:
@@ -19,8 +20,9 @@ jobs:
       - name: Checkout main repo with submodules
         uses: actions/checkout@v4
         with:
+          # Use the PAT for checkout to ensure proper credentials for submodule operations.
           token: ${{ secrets.WEBLATE_PUSH_TOKEN }}
-          submodules: recursive
+          submodules: recursive # Checkout the submodule at the state committed in the main repo.
 
       - name: Configure Git identity
         run: |
@@ -28,36 +30,53 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Get Submodule Path and Source File
-        id: get_paths
+        id: get_paths # Assign an ID to this step to access its outputs in subsequent steps.
         run: |
+          # Dynamically extract the submodule's local path from .gitmodules.
+          # This command looks for entries like '[submodule "..."] path = <actual_path>'
+          # and extracts the <actual_path>.
           SUBMODULE_PATH=$(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
-          SOURCE_FILE_PATH="en/translation.json" # Still assumes this is your source file relative to submodule
+
+          # Define the name of your source translation file within the submodule.
+          # Based on your feedback, this is 'en.json' directly inside the submodule root.
+          SOURCE_FILE_PATH="en.json" 
 
           if [ -z "$SUBMODULE_PATH" ]; then
-            echo "Error: Could not find submodule path in .gitmodules."
+            echo "Error: Could not find submodule path in .gitmodules. Please ensure your .gitmodules file is correctly configured."
             exit 1
           fi
 
           echo "Dynamically determined submodule path: ${SUBMODULE_PATH}"
           echo "Source translation file path (relative to submodule): ${SOURCE_FILE_PATH}"
 
+            
           echo "submodule_path=${SUBMODULE_PATH}" >> "$GITHUB_OUTPUT"
           echo "source_file_path=${SOURCE_FILE_PATH}" >> "$GITHUB_OUTPUT"
 
       - name: Commit and push changes in submodule
+        # Access outputs from the 'get_paths' step to use the dynamically determined paths.
         run: |
+          # Navigate into the submodule directory to perform Git operations specific to it.
           cd ${{ steps.get_paths.outputs.submodule_path }}
 
+          # Ensure we are on the 'main' branch of the submodule for the push.
+          # '|| git checkout -b main' attempts to create the branch if it doesn't exist locally.
           git checkout main || git checkout -b main
 
-          # This check is still important to only commit if the file genuinely changed.
-          # Otherwise, it would create empty commits in the submodule for unrelated main branch pushes.
+          # Check if the source translation file has any changes compared to the submodule's HEAD.
+          # The '--quiet' flag suppresses output; the command's exit code indicates diffs.
           if git diff --quiet ${{ steps.get_paths.outputs.source_file_path }}; then
             echo "No changes detected in ${{ steps.get_paths.outputs.source_file_path }} within the submodule. Skipping commit."
           else
             echo "Changes detected in ${{ steps.get_paths.outputs.source_file_path }}. Staging and committing..."
+            # Stage the specific source translation file for commit within the submodule.
             git add ${{ steps.get_paths.outputs.source_file_path }}
+            
+            # Create a commit within the submodule's repository.
             git commit -m "feat: Update source strings for Weblate"
+            
+            # Push the changes from the submodule's 'main' branch to its remote repository.
+            # This uses the PAT for authentication. Replace 'gediminasurvila' with your GitHub username.
             git push https://gediminasurvila:${{ secrets.WEBLATE_PUSH_TOKEN }}@github.com/gediminasurvila/react-weblate-i18n.git main
             echo "Source strings pushed to translation repository."
           fi
