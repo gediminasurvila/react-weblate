@@ -3,6 +3,11 @@ name: Update Translations
 on:
   workflow_dispatch: # Allows you to trigger this manually from GitHub Actions tab
 
+# Add permissions at the workflow level for simplicity, or just for the 'update-i18n' job.
+# Providing 'contents: write' is crucial for pushing.
+permissions:
+  contents: write # <--- ADD THIS LINE HERE!
+
 jobs:
   update-i18n:
     runs-on: ubuntu-latest
@@ -11,8 +16,7 @@ jobs:
       - name: Checkout main repository
         uses: actions/checkout@v4
         with:
-          # IMPORTANT: Do NOT initialize submodules here. We'll do it manually later.
-          submodules: false # Changed from 'recursive'
+          submodules: false # Keep this as false, we manage submodules manually
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set Git identity
@@ -20,7 +24,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      # --- REVISED SUBMODULE UPDATE LOGIC TO AVOID MERGE HISTORY ISSUES ---
       - name: Clean and Re-initialize Submodule to Latest Remote State
         run: |
           SUBMODULE_PATH="public/locales"
@@ -30,39 +33,25 @@ jobs:
           cat .gitmodules
 
           echo "Attempting to deinitialize and remove existing submodule directory to ensure clean state..."
-          # Deinitialize the submodule to remove its Git state from the parent repo's .git/modules
-          # This helps clear out any lingering bad state.
-          # Use || true to prevent the step from failing if deinit can't find anything (e.g., first run)
           git submodule deinit -f "${SUBMODULE_PATH}" || true
-
-          # Physically remove the submodule directory to ensure a fresh clone/checkout
           rm -rf "${SUBMODULE_PATH}"
 
-          echo "Synchronizing submodule configuration (in case .gitmodules was manually edited or has issues)..."
-          # This ensures the parent repo's internal config for the submodule's URL is correct.
+          echo "Synchronizing submodule configuration..."
           git submodule sync
 
           echo "Updating/Initializing submodule to the latest remote commit..."
-          # This command will clone/fetch the latest state of the submodule into the directory.
-          # --init: Initializes if not present.
-          # --remote: Updates to the commit specified by the submodule's remote tracking branch.
-          # --force: Overwrites any existing content (which is fine since we just deleted it).
           git submodule update --init --remote --force "${SUBMODULE_PATH}"
 
-          # Optional: Verify that the correct URL was used for the submodule update
           echo "Verifying the submodule URL after re-init..."
-          # Note: The syntax for 'git config --get' for submodules uses dots for path separators
           git config --get submodule.${SUBMODULE_PATH//\//.}.url || echo "Submodule URL not found in Git config, might be a path issue."
 
       - name: Stage and Commit Submodule Changes to Main Repo
         run: |
-          # Check if the submodule's tracked commit hash has changed in the parent repo
-          # This means new translations were pulled.
           if git diff --exit-code public/locales; then
             echo "No changes detected in the submodule commit hash. Skipping commit."
           else
             echo "Changes detected in the submodule commit hash. Staging and committing..."
-            git add public/locales # Stage the change in the submodule's commit hash for the parent repo
+            git add public/locales
             git commit -m "🔁 Update translations from Weblate"
-            git push
+            git push # This push should now succeed with 'contents: write' permission
           fi
