@@ -7,6 +7,7 @@ const About: React.FC = () => {
     <div>
       <h1>{t("about_us")}</h1>
       <div>{t("about_description")}</div>
+      <div>{t("about_cta")}</div>
     </div>
   );
 };
