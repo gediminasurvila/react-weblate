@@ -1,0 +1,74 @@
+name: Propose en.json Update to Translation Repo
+
+on:
+  push:
+    paths:
+      - "public/translations/locales/en.json"
+    branches:
+      - main # This workflow triggers when en.json changes in your *main* app repo
+
+  workflow_dispatch: # Allow manual trigger as well
+
+permissions:
+  contents: write # Needed for creating a branch and PR
+  pull-requests: write # Needed for creating a PR
+
+jobs:
+  propose-en-json-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main app repo
+        uses: actions/checkout@v4
+
+      - name: Configure Git identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Clone translations repo
+        run: |
+          # Use SSH for cloning if you have configured SSH keys for the bot,
+          # or HTTPS with a PAT that has repo scope for the target repo.
+          # We'll use HTTPS with the PAT as it's common for bots.
+          git clone https://gediminasurvila:${{ secrets.WEBLATE_PUSH_TOKEN }}@github.com/gediminasurvila/react-weblate-i18n.git translations-repo
+
+      - name: Copy updated en.json
+        run: |
+          cp public/translations/locales/en.json translations-repo/locales/en.json
+
+      - name: Check for changes
+        id: check_changes
+        working-directory: translations-repo
+        run: |
+          git add locales/en.json
+          # Check if there are any staged changes
+          if git diff --cached --quiet; then
+            echo "::set-output name=has_changes::false"
+          else
+            echo "::set-output name=has_changes::true"
+          fi
+
+      - name: Create branch and commit if changes exist
+        if: steps.check_changes.outputs.has_changes == 'true'
+        working-directory: translations-repo
+        run: |
+          BRANCH_NAME="feat/update-en-json-${{ github.sha }}" # Use commit SHA for unique branch name
+          git checkout -b $BRANCH_NAME
+          git commit -m "chore: update source language file en.json from ${{ github.repository }}@${{ github.ref_name }}"
+          git push origin $BRANCH_NAME
+
+      - name: Create Pull Request
+        if: steps.check_changes.outputs.has_changes == 'true'
+        uses: repo-sync/pull-request@v2 # Action to create a PR
+        with:
+          source_branch: feat/update-en-json-${{ github.sha }}
+          destination_branch: main
+          github_token: ${{ secrets.WEBLATE_PUSH_TOKEN }} # Use the same token for PR creation
+          pr_title: "chore: Automated en.json update from app repo"
+          pr_body: |
+            This PR proposes an automated update to the `en.json` source language file.
+            The changes originate from the main application repository (`${{ github.repository }}`) on branch `${{ github.ref_name }}`, commit `${{ github.sha }}`.
+            Please review and merge if appropriate.
+          pr_allow_empty: false # Do not create PR if no changes
+          pr_draft: false # Set to true if you want draft PRs
