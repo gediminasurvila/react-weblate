@@ -9,7 +9,7 @@ i18n
     lng: "en",
     fallbackLng: "en",
     backend: {
-      loadPath: "/translations/locales/{{lng}}.json",
+      loadPath: "translations/locales/{{lng}}.json",
     },
     interpolation: { escapeValue: false },
   });
