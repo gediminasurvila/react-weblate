@@ -1,12 +1,6 @@
 name: Propose en.json Update to Translation Repo
 
 on:
-  push:
-    paths:
-      - "public/translations/locales/en.json"
-    branches:
-      - main
-
   workflow_dispatch:
 
 permissions:
