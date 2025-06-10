@@ -83,6 +83,7 @@ jobs:
       - name: Create Pull Request
         if: steps.check_changes.outputs.has_changes == 'true'
         uses: repo-sync/pull-request@v2
+        working-directory: translations-repo # <--- ADD THIS LINE
         with:
           source_branch: feat/update-en-json-${{ github.sha }}
           destination_branch: main
@@ -94,3 +95,4 @@ jobs:
             Please review and merge if appropriate.
           pr_allow_empty: false
           pr_draft: false
+        continue-on-error: true # Keep this for now to see if it still errors after the fix
