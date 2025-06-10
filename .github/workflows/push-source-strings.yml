@@ -1,106 +1,47 @@
-# .github/workflows/push-source-strings.yml
-name: Push new source strings to translation repo
+name: Push en.json to Translation Repo
 
 on:
   push:
-    # This action will now trigger on ANY push to the 'main' branch of your main repository.
+    paths:
+      - "public/translations/locales/en.json"
     branches:
       - main
-  workflow_dispatch: # Allows manual triggering from the GitHub Actions tab.
+
+  workflow_dispatch: # Allow manual trigger as well
 
 permissions:
-  # This workflow needs to read content from the main repo (implicitly granted by checkout).
-  # The push to the submodule repo is handled by the PAT in the push URL, not GITHUB_TOKEN permissions here.
-  contents: read # Minimal permission for the GITHUB_TOKEN for basic repo access.
+  contents: read
 
 jobs:
-  push-source-translations:
+  push-en-json:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout main repo with submodules
+      - name: Checkout main repo
         uses: actions/checkout@v4
-        with:
-          # Use the PAT for checkout to ensure proper credentials for submodule operations.
-          token: ${{ secrets.WEBLATE_PUSH_TOKEN }}
-          submodules: recursive # Checkout the submodule at the state committed in the main repo.
 
       - name: Configure Git identity
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Get Submodule Path and Source File
-        id: get_paths # Assign an ID to this step to access its outputs in subsequent steps.
+      - name: Clone translations repo
         run: |
-          # Dynamically extract the submodule's local path from .gitmodules.
-          # This command looks for entries like '[submodule "..."] path = <actual_path>'
-          # and extracts the <actual_path>.
-          SUBMODULE_PATH=$(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+          git clone https://gediminasurvila:${{ secrets.WEBLATE_PUSH_TOKEN }}@github.com/gediminasurvila/react-weblate-i18n.git translations-repo
+          ls translations-repo
 
-          # Define the name of your source translation file within the submodule.
-          # Based on your feedback, this is 'en.json' directly inside the submodule root.
-          SOURCE_FILE_PATH="locales/en.json" 
-
-          if [ -z "$SUBMODULE_PATH" ]; then
-            echo "Error: Could not find submodule path in .gitmodules. Please ensure your .gitmodules file is correctly configured."
-            exit 1
-          fi
-
-          echo "Dynamically determined submodule path: ${SUBMODULE_PATH}"
-          echo "Source translation file path (relative to submodule): ${SOURCE_FILE_PATH}"
-
-
-          echo "submodule_path=${SUBMODULE_PATH}" >> "$GITHUB_OUTPUT"
-          echo "source_file_path=${SOURCE_FILE_PATH}" >> "$GITHUB_OUTPUT"
-
-      - name: Commit and push changes in submodule # Corrected indentation here!
-        # Access outputs from the 'get_paths' step to use the dynamically determined paths.
+      - name: Copy updated en.json
         run: |
-          SUBMODULE_DIR="${{ steps.get_paths.outputs.submodule_path }}"
-          SOURCE_FILE="${{ steps.get_paths.outputs.source_file_path }}" # This is now "en.json"
+          cp public/translations/locales/en.json translations-repo/locales/en.json
 
-          echo "Attempting to process submodule: ${SUBMODULE_DIR}"
-          echo "Expected source file: ${SOURCE_FILE}"
+      - name: Commit & push to translations repo
+        working-directory: translations-repo
+        run: |
+          git add locales/en.json
 
-          # Navigate into the submodule directory.
-          cd "${SUBMODULE_DIR}"
-
-          # Ensure we are on the 'main' branch of the submodule for the push.
-          # This command ensures that the submodule's local 'main' branch exists and is checked out.
-          # '|| git checkout -b main' means "if git checkout main fails, then create and checkout a new 'main' branch".
-          git checkout main || git checkout -b main
-
-          # --- CRITICAL DEBUGGING STEP: Verify file existence and content ---
-          echo "Contents of submodule directory ('$(pwd)'):"
-          ls -F
-          echo "Contents of expected source file ('${SOURCE_FILE}'):"
-          if [ -f "$SOURCE_FILE" ]; then
-            cat "$SOURCE_FILE"
+          if git diff --cached --quiet; then
+            echo "No changes to commit. Skipping push."
           else
-            echo "ERROR: ${SOURCE_FILE} does NOT exist in the submodule directory!"
-            # Exit with an error to stop the workflow if the file is genuinely missing
-            exit 1 
-          fi
-          # --- END DEBUGGING STEP ---
-
-
-          # Check if there are actual changes to the source file
-          # We'll use 'git status --porcelain' which is more robust for checking working tree changes.
-          # It returns unstaged (M), added (A), or deleted (D) files.
-          if git status --porcelain | grep -q "${SOURCE_FILE}"; then
-            echo "Changes detected in ${SOURCE_FILE}. Staging and committing..."
-            git add "${SOURCE_FILE}"
-            
-            # Check if there's actually anything to commit after 'git add'
-            if git diff --cached --quiet; then
-              echo "No actual changes to commit after staging ${SOURCE_FILE}. Skipping commit."
-            else
-              git commit -m "feat: Update source strings for Weblate"
-              # Push using the PAT to the submodule's remote
-              git push https://gediminasurvila:${{ secrets.WEBLATE_PUSH_TOKEN }}@github.com/gediminasurvila/react-weblate-i18n.git main
-              echo "Source strings pushed to translation repository."
-            fi
-          else
-            echo "No changes detected in ${SOURCE_FILE} within the submodule's working tree relative to its HEAD. Skipping commit."
+            git commit -m "chore: update source language file en.json"
+            git push origin main
           fi
