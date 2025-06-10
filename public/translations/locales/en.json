@@ -1,7 +1,7 @@
 {
   "about": "About",
-  "about_cta": "Click me",
-  "about_description": "",
+  "about_cta": "",
+  "about_description": "Some information about us.",
   "about_us": "About Us",
   "home": "Home",
   "welcome_home": "Welcome to the Home Page!"
