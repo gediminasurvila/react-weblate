@@ -13,7 +13,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <Router>
+    <Router basename="/react-weblate/">
       <div style={{ padding: "1rem" }}>
         <nav>
           <Link to="/" style={{ marginRight: "1rem" }}>
