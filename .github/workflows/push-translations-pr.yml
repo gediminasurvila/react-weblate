@@ -15,7 +15,7 @@ jobs:
       - name: Checkout main app repo (Source)
         uses: actions/checkout@v4
         with:
-          path: "./source-app-repo" # Checkout into a dedicated sub-directory
+          path: source-app-repo
 
       - name: Configure Git identity
         run: |
@@ -25,7 +25,6 @@ jobs:
       - name: Clone translations repo (Target)
         run: |
           git clone https://gediminasurvila:${{ secrets.WEBLATE_PUSH_TOKEN }}@github.com/gediminasurvila/react-weblate-i18n.git translations-repo
-        working-directory: "./" # Ensure clone happens in the root of the runner's workspace
 
       - name: Show contents before copy
         run: |
@@ -37,7 +36,6 @@ jobs:
       - name: Copy updated en.json
         run: |
           cp -f ./source-app-repo/public/translations/locales/en.json ./translations-repo/locales/en.json
-          # Use -f (force) to ensure overwrite
           echo "Copy complete."
 
       - name: Show contents after copy and diff against HEAD
@@ -46,7 +44,7 @@ jobs:
           echo "Target en.json from translations repo AFTER copy:"
           cat locales/en.json
           echo "Diff against HEAD of main branch:"
-          git diff HEAD -- locales/en.json || true # Shows changes in working dir vs last commit
+          git diff HEAD -- locales/en.json || true
 
       - name: Check for changes and set output
         id: check_changes
@@ -54,36 +52,29 @@ jobs:
         run: |
           git add locales/en.json
           echo "Git status after add:"
-          git status --porcelain # Use --porcelain for cleaner output
+          git status --porcelain
 
-          # Check if there are any staged changes.
-          # If git diff --cached --quiet returns non-zero, it means there ARE changes.
           if git diff --cached --quiet; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "No changes detected by git diff --cached --quiet (locales/en.json is same as HEAD)."
+            echo "No changes detected."
           else
             echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "Changes detected by git diff --cached --quiet. Proceeding to create PR."
+            echo "Changes detected. Proceeding to create PR."
           fi
 
       - name: Create branch and commit if changes exist
         if: steps.check_changes.outputs.has_changes == 'true'
         working-directory: translations-repo
         run: |
-          BRANCH_NAME="feat/update-en-json-${{ github.sha }}" # Use commit SHA for unique branch name
-          echo "Attempting to checkout branch: $BRANCH_NAME"
-          # Ensure you are on a branch, often `main` by default, before creating a new one
-          git checkout main # Ensure we are on main before branching
+          BRANCH_NAME="feat/update-en-json-${{ github.sha }}"
+          git checkout main
           git checkout -b $BRANCH_NAME
-          echo "Committing changes..."
           git commit -m "chore: update source language file en.json from ${{ github.repository }}@${{ github.ref_name }}"
-          echo "Pushing branch: $BRANCH_NAME"
           git push origin $BRANCH_NAME
 
       - name: Create Pull Request
         if: steps.check_changes.outputs.has_changes == 'true'
         uses: repo-sync/pull-request@v2
-        working-directory: translations-repo # <--- ADD THIS LINE
         with:
           source_branch: feat/update-en-json-${{ github.sha }}
           destination_branch: main
@@ -95,4 +86,4 @@ jobs:
             Please review and merge if appropriate.
           pr_allow_empty: false
           pr_draft: false
-        continue-on-error: true # Keep this for now to see if it still errors after the fix
+        continue-on-error: true
