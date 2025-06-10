@@ -44,9 +44,9 @@ jobs:
           git add locales/en.json
           # Check if there are any staged changes
           if git diff --cached --quiet; then
-            echo "::set-output name=has_changes::false"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=has_changes::true"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Create branch and commit if changes exist
