@@ -1,9 +1,10 @@
 name: Deploy React App to GitHub Pages
 
 on:
-  push:
-    branches:
-      - main # or 'master', depending on your default branch
+  workflow_dispatch:
+  # push:
+  #   branches:
+  #     - main # or 'master', depending on your default branch
 
 permissions:
   contents: read # We only need to read the repo contents initially
