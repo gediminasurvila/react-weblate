@@ -10,8 +10,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: write # Needed for creating a branch and PR
+  pull-requests: write # Needed for creating a PR
 
 jobs:
   propose-en-json-update:
@@ -21,7 +21,7 @@ jobs:
       - name: Checkout main app repo (Source)
         uses: actions/checkout@v4
         with:
-          path: './source-app-repo' # Checkout into a dedicated sub-directory
+          path: "./source-app-repo" # Checkout into a dedicated sub-directory
 
       - name: Configure Git identity
         run: |
@@ -31,9 +31,9 @@ jobs:
       - name: Clone translations repo (Target)
         run: |
           git clone https://gediminasurvila:${{ secrets.WEBLATE_PUSH_TOKEN }}@github.com/gediminasurvila/react-weblate-i18n.git translations-repo
-        working-directory: './' # Ensure clone happens in the root of the runner's workspace
+        working-directory: "./" # Ensure clone happens in the root of the runner's workspace
 
-      - name: Debug: Show contents before copy
+      - name: Show contents before copy
         run: |
           echo "Source en.json from app repo:"
           cat ./source-app-repo/public/translations/locales/en.json
@@ -46,7 +46,7 @@ jobs:
           # Use -f (force) to ensure overwrite
           echo "Copy complete."
 
-      - name: Debug: Show contents after copy and diff against HEAD
+      - name: Show contents after copy and diff against HEAD
         working-directory: translations-repo
         run: |
           echo "Target en.json from translations repo AFTER copy:"
@@ -76,7 +76,7 @@ jobs:
         if: steps.check_changes.outputs.has_changes == 'true'
         working-directory: translations-repo
         run: |
-          BRANCH_NAME="feat/update-en-json-${{ github.sha }}"
+          BRANCH_NAME="feat/update-en-json-${{ github.sha }}" # Use commit SHA for unique branch name
           echo "Attempting to checkout branch: $BRANCH_NAME"
           # Ensure you are on a branch, often `main` by default, before creating a new one
           git checkout main # Ensure we are on main before branching
