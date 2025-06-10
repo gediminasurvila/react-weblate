@@ -23,4 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 
-/public/translations/locales/
+# Ignore all translation files
+/public/translations/locales/*
+
+# But track the source language file (en.json)
+!/public/translations/locales/en.json

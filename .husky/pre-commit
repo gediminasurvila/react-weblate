@@ -1,1 +1,8 @@
 #!/usr/bin/env sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "🔍 Extracting translations..."
+npm run extract-translations
+
+echo "🧼 Adding updated en.json to Git..."
+git add public/translations/locales/en.json
