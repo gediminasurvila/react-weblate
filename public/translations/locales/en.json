@@ -6,6 +6,6 @@
   "home": "Home",
   "welcome_home": "Welcome to the Home Page!",
   "welcome.cta": "",
-  "welcome.cta-2": "",
+  "welcome.cta-2": "hello {{name}}",
   "welcome.description_text": ""
 }
